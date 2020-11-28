@@ -3,7 +3,7 @@ import numpy as np
 from copy import deepcopy
 import collections
 from tablut.rules.ashton import Board, Player
-from tablut.game import WinException, LoseException, DrawException
+from tablut.game import Game, WinException, LoseException, DrawException
 
 BOARD_SIDE = 9
 BOARD_SIZE = BOARD_SIDE * BOARD_SIDE
@@ -27,12 +27,21 @@ def deflatten_move(move: int) -> tuple:
     end = divmod(end, BOARD_SIDE)
     return start, end
 
+
+class RootNode(object):
+    def __init__(self):
+        self.root = True
+        self.legal_move_map = list(range(ACTION_SPACE_SIZE))
+        self.child_total_value = np.zeros([ACTION_SPACE_SIZE], dtype=np.float32)
+        self.child_number_visits = np.zeros([ACTION_SPACE_SIZE], dtype=np.float32)
+
+
 class Node(object):
     """
     Based on https://www.moderndescartes.com/essays/deep_dive_mcts/
     """
 
-    def __init__(self, board, player, parent=None, move=None, remaining_moves=50):
+    def __init__(self, game, parent=None, move=None, remaining_moves=50):
         """
         Initialize a node containing the board state, the move performed to reach this node and the
         parent of the node.
@@ -43,9 +52,9 @@ class Node(object):
         child_total_value -> evaluation of childs (high if they bring to a win)
         child_number_visits -> how many times have this node been visited?
         """
-        self.board = board
-        self.player = player
-        self.move = None
+        self.root = False
+        self.game = game
+        self.move = move
 
         self.remaining_moves = remaining_moves
 
@@ -53,52 +62,60 @@ class Node(object):
         self.parent = parent
         self.children = {} # Dict[move, Node instance]
 
-        self.child_priors = np.random.random([ACTION_SPACE_SIZE])
-        self.child_total_value = np.zeros([ACTION_SPACE_SIZE], dtype=np.float32)
-        self.child_number_visits = np.zeros([ACTION_SPACE_SIZE], dtype=np.float32)
+        #self.child_priors = np.zeros([ACTION_SPACE_SIZE], dtype=np.float32)
+        legal = lambda m: game.board.is_legal(game.turn, *deflatten_move(m))[0]
+        self.legal_move_map = list(filter(legal, range(ACTION_SPACE_SIZE)))
+        self.child_total_value = np.zeros([len(self.legal_move_map)], dtype=np.float32)
+        self.child_number_visits = np.zeros([len(self.legal_move_map)], dtype=np.float32)
 
     @property
     def number_visits(self):
         """
         Number of times a child has been visited (reduce its U)
         """
-        return self.parent.child_number_visits[self.move]
+        idx = self.parent.legal_move_map.index(self.move)
+        return self.parent.child_number_visits[idx]
 
     @number_visits.setter
     def number_visits(self, value):
-        self.parent.child_number_visits[self.move] = value
+        idx = self.parent.legal_move_map.index(self.move)
+        self.parent.child_number_visits[idx] = value
 
     @property
     def total_value(self):
         """
-        How good a Node is (high Q)
+        How many win has been totalized passing through that node
         """
-        return self.parent.child_total_value[self.move]
+        idx = self.parent.legal_move_map.index(self.move)
+        return self.parent.child_total_value[idx]
 
     @total_value.setter
     def total_value(self, value):
-        self.parent.child_total_value[self.move] = value
+        idx = self.parent.legal_move_map.index(self.move)
+        self.parent.child_total_value[idx] = value
 
     def child_Q(self):
         """
-        Calculate Q of each child
-        Q is quality e.g. how good we know a child is 
+        Calculate Q of each child as the number of wins of that child divided by the number of plays of
+        that child if we select him
+        e.g. already know quality of the node, how good we know that child is 
         """
         return self.child_total_value / (1 + self.child_number_visits)
 
     def child_U(self):
         """
-        Calculate U of each child
-        U is unexpectancy e.g. how little we have explored a child 
+        Calculate U of each child as sqrt(2) * sqrt(ln(N) / n) where N is the number of visits of
+        this node, and n is the number of visits of the child if we choose him 
+        U is unexpectancy e.g. how little we have explored that child 
         """
-        return np.sqrt(self.number_visits) * (
-            self.child_priors / (1 + self.child_number_visits))
+        return np.sqrt(2) * np.sqrt(np.log(self.number_visits) / (self.child_number_visits + 1))
 
     def best_child(self):
         """
         Return the most promising move among childs
         """
-        return np.argmax(self.child_Q() + self.child_U())
+        idx = np.argmax(self.child_Q() + self.child_U())
+        return self.legal_move_map[idx]
 
     def select_leaf(self):
         """
@@ -106,96 +123,88 @@ class Node(object):
         yet, choose the best child based on the evaluations made on them
         """
         current = self
-        while current.is_expanded and current.remaining_moves != 0:
+        while current.is_expanded:
             # Get most promising move
             best_move = current.best_child()
-            start, end = deflatten_move(best_move)
-            # Check if move is legal
-            legal, _ = current.board.is_legal(current.player, start, end)
-            # Get che child
-            if legal:
-                try:
-                    child = current.maybe_add_child(best_move) 
-                    current = child
-                except WinException:
-                    # Reached leaf is a win condition for white
-                    #print("Found win")
-                    current.total_value = 1
-                    print("WIN")
-                    current.is_expanded = False
-                except (DrawException, LoseException):
-                    # Reached leaf is a lose condition
-                    current.total_value = -1
-                    current.is_expanded = False
-            else:
-                # Move is illegal so its probability of being chosen need to be 0
-                current.child_priors[best_move] = 0
+            current = current.maybe_add_child(best_move)        
         return current
 
-    def expand(self, child_priors):
+    def expand(self):
         """
-        Set this node as fully expanded and set the next nodes prior goodness
+        Expand the game by taking random actions until a win condition is met
         """
-        self.is_expanded = True
-        self.child_priors = child_priors
+        current = self
+        while not current.game.ended and current.remaining_moves > 0:
+            # Get one random move
+            move = np.random.choice(current.legal_move_map)
+            current = current.maybe_add_child(move)
+        return current
+
+    def add_child(self, move):
+        """
+        Add a child node
+        """
+        new_game = deepcopy(self.game)
+        if new_game.turn is Player.WHITE:
+            new_game.white_move(*deflatten_move(move))
+        else:
+            new_game.black_move(*deflatten_move(move))
+
+        self.children[move] = Node(new_game, parent=self, move=move, remaining_moves=(self.remaining_moves - 1))
+        return self.children[move]
 
     def maybe_add_child(self, move):
         """
-        Check if a move from the current state has already been performed
-        return the corresponding child node or create the node
+        If a move have already been performed in the past return its associated child,
+        otherwise create it
         """
         if move not in self.children:
-            # deflatten move for board execution
-            start, end = deflatten_move(move)
-            # get new state
-            new_state = deepcopy(self.board)
-            new_state.step(self.player, start, end)
-            # create new node that will execute as other player
-            self.children[move] = Node(new_state, self.player.next(), parent=self, remaining_moves=(self.remaining_moves - 1))
+            self.add_child(move)
         return self.children[move]
 
-    def backup(self, value_estimate):
+    def backup(self):
         """
         Backpropagate results.
         Note that depending on the player who is making the move whe need to change the 
         value estimation sign so that each player can take the best possible actions.
         In this scenario as WHITE moves first we invert when BLACK is playing.
         """
-        invert = 1 if self.player is Player.WHITE else -1
+        winner = self.game.winner
         current = self
-        while current.parent is not None:
+        while not current.parent.root:
             current.number_visits += 1
-            current.total_value += (value_estimate * invert)
+            if current.game.turn is winner:
+                current.total_value += 1
             current = current.parent
 
-class DummyNode(object):
-  def __init__(self):
-    self.parent = None
-    self.child_priors = np.random.random([ACTION_SPACE_SIZE])
-    self.child_total_value = np.zeros([ACTION_SPACE_SIZE], dtype=np.float32)
-    self.child_number_visits = np.zeros([ACTION_SPACE_SIZE], dtype=np.float32)
 
+def move_search(game_state, simulations, start=None, max_depth=50):
+    if start is None:
+        start = Node(game_state, parent=RootNode(), remaining_moves=max_depth)
+    
+    for i in range(simulations):
+        leaf = start.select_leaf()
+        leaf = leaf.expand()
+        print("Winner: %s" % leaf.game.winner)
+        leaf.backup()
 
-def move_search(game_state, num_reads, root=None, max_depth=50):
-    if root is None:
-        root = Node(game_state, Player.WHITE, parent=DummyNode(), remaining_moves=max_depth)
-    for i in range(num_reads):
-        leaf = root.select_leaf()
-        child_priors = np.random.random([ACTION_SPACE_SIZE])
-        value_estimate = 0
-        leaf.expand(child_priors)
-        leaf.backup(value_estimate)
+    # If start is Root than take the first children (which is indeed the first game state)
+    # this is due to numpy usage where data about child is actually stored in parent
+    if start.parent.root:
+        end = list(start.children.values())[0]
+    else:
+        end = start
 
-    move, node = max(root.children.items(), key=lambda item: item[1].number_visits)
+    move, node = max(end.children.items(), key=lambda item: item[1].number_visits)
     start, end = deflatten_move(move)
     return start, end, node
 
 if __name__ == "__main__":
-    num_reads = 1300
-    game = Board()
+    num_reads = 50
+    game = Game(Board())
     import time
     tick = time.time()
-    start, end, node = move_search(game, num_reads, max_depth=50, root=None)
+    start, end, node = move_search(game, num_reads, max_depth=10, start=None)
     tock = time.time()
     print("%s -> %s _  %d simulations in %.2fs" % (start, end, num_reads, tock - tick))
     import resource
