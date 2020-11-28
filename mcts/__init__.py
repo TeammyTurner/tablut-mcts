@@ -1,1 +1,1 @@
-from mcts.mcts import Node, move_search
+from mcts.mcts import MCTS

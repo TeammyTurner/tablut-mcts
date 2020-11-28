@@ -4,7 +4,7 @@ from copy import deepcopy
 import collections
 from tablut.rules.ashton import Board, Player
 from tablut.game import Game, WinException, LoseException, DrawException
-import heuristics
+import mcts.heuristics as heuristics
 
 BOARD_SIDE = 9
 BOARD_SIZE = BOARD_SIDE * BOARD_SIDE
@@ -117,7 +117,8 @@ class Node(object):
         """
         Return the most promising move among childs
         """
-        idx = np.argmax(self.child_Q() + self.child_U() + self.child_Pb())
+        #idx = np.argmax(self.child_Q() + self.child_U() + self.child_Pb())
+        idx = np.argmax(self.child_Q() + self.child_U())
         return self.legal_moves[idx]
 
     def select_leaf(self):
@@ -148,10 +149,11 @@ class Node(object):
         Add a child node
         """
         new_game = deepcopy(self.game)
+        # skip legality check when making move as we only try legal moves
         if new_game.turn is Player.WHITE:
-            new_game.white_move(*deflatten_move(move))
+            new_game.white_move(*deflatten_move(move), known_legal=True)
         else:
-            new_game.black_move(*deflatten_move(move))
+            new_game.black_move(*deflatten_move(move), known_legal=True)
 
         rm = self.remaining_moves - 1
         self.children[move] = Node(new_game, parent=self, move=move, remaining_moves=rm)
@@ -241,7 +243,7 @@ class MCTS(object):
         for _ in range(simulations):
             leaf = start.select_leaf()
             leaf = leaf.expand()
-            #print("Winner: %s" % leaf.game.winner)
+            print("Winner: %s" % leaf.game.winner)
             leaf.backup()
         
         move, node = max(start.children.items(),

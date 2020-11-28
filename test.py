@@ -1,9 +1,9 @@
-from mcts import move_search
+from mcts import MCTS
 from tablut.game import Game, Player
 from tablut.rules.ashton import Board
 from tablut.player import RandomPlayer
 import time
-from copy import copy
+from copy import deepcopy
 import pprint
 
 
@@ -18,7 +18,8 @@ max_depth = 50
 node = None
 while not game.ended:
   tick = time.time()
-  start, end, node = move_search(copy(game.board), num_reads, max_depth=max_depth)
+  mcts = MCTS(deepcopy(game), max_depth=120)
+  start, end = mcts.search(3)
   # TODO: Reuse the tree
   tock = time.time()
   print("%s -> %s _  %.2fs" % (start, end, tock - tick))
