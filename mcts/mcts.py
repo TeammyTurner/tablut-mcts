@@ -106,10 +106,10 @@ class Node(object):
         the number of visits of the child if we choose him
         """
         child_heuristics = list()
-        for move, node in self.children.items():
-            player = node.game.turn
-            next_board = node.game.what_if(*deflatten_move(move))
-            child_heuristics.append(heuristics.evaluate(next_board, player))
+        for move in self.legal_moves:
+            next_game = self.game.what_if(*deflatten_move(move))
+            packed_board = next_game.board.pack(next_game.board.board)
+            child_heuristics.append(heuristics.evaluate(packed_board, self.game.turn))
 
         return child_heuristics / (self.child_number_visits + 1)
 
@@ -217,33 +217,49 @@ class Root(Node):
         self._total_value = v
 
 
-def move_search(game_state, simulations, start=None, max_depth=50):
-    if start is None:
-        start = Root(game_state, remaining_moves=2)
+class MCTS(object):
+    """
+    Perform montecarlo tree search on the tablut game.
+    # TODO: Implement adaptive max_depth? Detect how useless a reached state is?
+    # TODO: Implement adaptive simulation? If we can do few legal moves it makes sense doing more simulations
+    # TODO: Implement exploratory-quality-heuristics weights?
+    # TODO: Implement setting a new node by modifying the current one
+    """
+    def __init__(self, game_state, max_depth=20):
+        self.game = None
+        self.max_depth = max_depth
+        self.root = Root(game_state, remaining_moves=max_depth)
 
-
-
-    for _ in range(simulations):
-        leaf = start.select_leaf()
-        leaf = leaf.expand()
-        #print("Winner: %s" % leaf.game.winner)
-        leaf.backup()
-
-    move, node = max(start.children.items(),
-                     key=lambda item: item[1].number_visits)
-    start, end = deflatten_move(move)
-    return start, end, node
-
+    def search(self, simulations):
+        """
+        Perform search using a specified amount of simulations
+        Max depth represents the maximum number of moves that can be performed in 
+        expansion phase
+        # TODO: Detect if multiple CPUs and implement multithread search? (Node is not thread safe)
+        """
+        start = self.root
+        for _ in range(simulations):
+            leaf = start.select_leaf()
+            leaf = leaf.expand()
+            #print("Winner: %s" % leaf.game.winner)
+            leaf.backup()
+        
+        move, node = max(start.children.items(),
+                          key=lambda item: item[1].number_visits)
+        
+        self.root = node
+        return deflatten_move(move)
 
 if __name__ == "__main__":
-    num_reads = 50
+    simulations = 10
     game = Game(Board())
+    mcts = MCTS(game, max_depth=10)
     import time
     tick = time.time()
-    start, end, node = move_search(game, num_reads, max_depth=10, start=None)
+    start, end = mcts.search(simulations)
     tock = time.time()
     print("%s -> %s _  %d simulations in %.2fs" %
-          (start, end, num_reads, tock - tick))
+          (start, end, simulations, tock - tick))
     import resource
     print("Consumed %sB memory" %
           resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
