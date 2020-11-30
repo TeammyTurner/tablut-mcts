@@ -18,7 +18,7 @@ max_depth = 50
 node = None
 while not game.ended:
   tick = time.time()
-  mcts = MCTS(deepcopy(game), max_depth=120)
+  mcts = MCTS(deepcopy(game), max_depth=100)
   start, end = mcts.search(3)
   # TODO: Reuse the tree
   tock = time.time()

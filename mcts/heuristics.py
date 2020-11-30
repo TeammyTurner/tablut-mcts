@@ -1,4 +1,59 @@
 from tablut.game import Player
+import numpy as np
+
+class Heuristic(object):
+    def __init__(self):
+        self.ESCAPE_DISTANCE_WEIGHT = 1
+        self.PLAYER_RATIO_WIGHT = 1
+
+    def evaluate(self, board, player):
+        """
+        Return the weighted sum of the parameters
+        """
+        score = 0
+
+        # Player to enemies player ratio
+        enemy = player.next()
+        score += self.PLAYER_RATIO_WIGHT * (player_pieces(board, player) / player_pieces(board, enemy))
+        
+        # Low distance of king from escape is good for whites, bad for blacks
+        how_good = 1 if player is Player.WHITE else -1
+        score += how_good * self.ESCAPE_DISTANCE_WEIGHT * king_escape_distance(board)
+
+        return score
+
+def player_pieces(board, player):
+    """
+    Get the number of pieces of a player (escape occupied by king is escluded as its a winning condition)
+    Players count are normalized between 0 and 1 because initially black have more pieces than white, we
+    want a fair evaluation in comparison to initial state
+    """
+    count = 0
+    if player is Player.WHITE:
+        count = np.sum(board > 1.3) / 9
+    else:
+        count = np.sum(board < -2) / 12 
+
+    return count
+
+def king_escape_distance(board):
+    """
+    Distance between king ad escape
+    king is considered near an escape if its outside a square of radius 4 with center on the castle:
+    let king coords be (x, y), 
+        if |(x - 4) + (y - 4)| + |(x - 4) - (y - 4)| > 4 => king is near the border
+    """
+    # king position
+    p = np.transpose(((board == 1.7) | (board == 1) | (board == 1.3)).nonzero())
+    if p.sum() > 0:
+        p = p[0]
+        distance = np.abs((p[0] - 4) + (p[1] + 4)) + np.abs((p[0] - 4) - (p[1] + 4))
+    else:
+        # If no king is found then has been captured
+        distance = 5
+
+    return distance
+
 
 KING_IN_TROUBLE_WEIGHT = 1
 KING_IN_TROUBLE_EXP_BASE = 1.2
@@ -51,11 +106,14 @@ def king_in_trouble_rating(board):
     return KING_IN_TROUBLE_WEIGHT*(KING_IN_TROUBLE_EXP_BASE**black_pieces_around_king - 1)
 
 
-#Calculate a value based on how many pieces of a specific color 
-#can be captured by the opponent with a single move
-# At 0, the function returns 0
-# At more pieces, it will return exponentially more
-def pieces_in_trouble_rating(board,player):
+
+def pieces_in_trouble_rating(board, player):
+    """
+    Calculate a value based on how many pieces of a specific color can be captured by 
+    the opponent with a single move
+    At 0, the function returns 0
+    At more pieces, it will return exponentially more
+    """
     if player == "Player.WHITE":
         attacker = "W"
         defender = "B"
