@@ -12,14 +12,14 @@ game = Game(board)
 black_player = RandomPlayer(game, Player.BLACK)
 
 # mcts parameters
-num_reads = 10000
+num_reads = 3
 max_depth = 50
 
 node = None
 while not game.ended:
   tick = time.time()
-  mcts = MCTS(deepcopy(game), max_depth=100)
-  start, end = mcts.search(3)
+  mcts = MCTS(deepcopy(game), max_depth=max_depth)
+  start, end = mcts.search(num_reads)
   # TODO: Reuse the tree
   tock = time.time()
   print("%s -> %s _  %.2fs" % (start, end, tock - tick))
