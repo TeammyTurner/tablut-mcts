@@ -344,6 +344,8 @@ class MCTS(object):
             leaf.backup()
             s_per_simulation.append(time.time() - simulation_start_t)
             self.simulations += 1
+            if self.simulations % 1000 == 0:  # We print this at every k
+                print("Currently at simulation: {}".format(self.simulations))
 
         # adapt new max_depth based on past needed moves
         avg = sum(self._needed_moves) / len(self._needed_moves)
