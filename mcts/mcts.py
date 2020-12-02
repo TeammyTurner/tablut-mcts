@@ -325,8 +325,7 @@ class MCTS(object):
     def search(self, max_time):
         """
         Perform search using a specified amount of simulations
-        Max depth represents the maximum number of moves that can be performed in 
-        expansion phase
+        Max time represents the number of secs before timeout
         # TODO: Detect if multiple CPUs and implement multithread search? (Node is not thread safe)
         """
         start = self._root
