@@ -5,6 +5,7 @@ import itertools
 from tablut.rules.ashton import Board, Player
 from tablut.game import Game, WinException, LoseException, DrawException
 from mcts.heuristics import Heuristic
+import time
 
 BOARD_SIDE = 9
 BOARD_SIZE = BOARD_SIDE * BOARD_SIDE
@@ -321,7 +322,7 @@ class MCTS(object):
             self._root = Root(self.game, remaining_moves=self.max_depth,
                               heuristic=self.heuristic)
 
-    def search(self, simulations):
+    def search(self, max_time):
         """
         Perform search using a specified amount of simulations
         Max depth represents the maximum number of moves that can be performed in 
@@ -329,11 +330,20 @@ class MCTS(object):
         # TODO: Detect if multiple CPUs and implement multithread search? (Node is not thread safe)
         """
         start = self._root
-        for _ in range(simulations):
+        start_t = time.time()
+        self.simulations = 0
+        
+        s_per_simulation = list()
+        avg = lambda l: 0 if len(l) == 0 else sum(l) / len(l)
+
+        while ((time.time() - start_t) + avg(s_per_simulation)) <= max_time:
+            simulation_start_t = time.time()
             leaf = start.select_leaf()
             leaf = leaf.expand()
             self._needed_moves.append(self.max_depth - leaf.remaining_moves)
             leaf.backup()
+            s_per_simulation.append(time.time() - simulation_start_t)
+            self.simulations += 1
 
         # adapt new max_depth based on past needed moves
         avg = sum(self._needed_moves) / len(self._needed_moves)
@@ -344,6 +354,7 @@ class MCTS(object):
 
         self._root = node
         self._root.remaining_moves = self.max_depth
+        self.game = self._root.game
         return deflatten_move(move)
 
 
