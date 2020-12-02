@@ -74,7 +74,7 @@ class Node(object):
                 self.game.board.board == 1) | (self.game.board.board == 1.7)
         else:
             positions = (self.game.board.board == -2.5) | (
-                self.game.board.board == -2) | (self.game.board.board == -0.5)
+                self.game.board.board == -2)
         return positions
 
     def _possible_ending_positions(self):
@@ -331,9 +331,9 @@ class MCTS(object):
         start = self._root
         start_t = time.time()
         self.simulations = 0
-        
+
         s_per_simulation = list()
-        avg = lambda l: 0 if len(l) == 0 else sum(l) / len(l)
+        def avg(l): return 0 if len(l) == 0 else sum(l) / len(l)
 
         while ((time.time() - start_t) + avg(s_per_simulation)) <= max_time:
             simulation_start_t = time.time()
