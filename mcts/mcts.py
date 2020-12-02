@@ -192,20 +192,21 @@ class Node(object):
         """
         Expand the game by taking random actions until a win condition is met
         """
-        self.is_expanded = True
-        current = self
-        while not current.game.ended and current.remaining_moves > 0:
-            # Get the best possible move
-            if current.heuristic is not None:
-                def what_if_board(m):
-                    return current.game.what_if(*deflatten_move(m)).board.board
-                move_priors = [current.heuristic.evaluate(what_if_board(m), current.game.turn)
-                               for m in current.legal_moves]
-                move = current.legal_moves[np.argmax(move_priors)]
-            else:
-                move = np.random.choice(current.legal_moves)
+        if self.is_expanded:
+            self.is_expanded = True
+            current = self
+            while not current.game.ended and current.remaining_moves > 0:
+                # Get the best possible move
+                if current.heuristic is not None:
+                    def what_if_board(m):
+                        return current.game.what_if(*deflatten_move(m)).board.board
+                    move_priors = [current.heuristic.evaluate(what_if_board(m), current.game.turn)
+                                   for m in current.legal_moves]
+                    move = current.legal_moves[np.argmax(move_priors)]
+                else:
+                    move = np.random.choice(current.legal_moves)
 
-            current = current.maybe_add_child(move)
+                current = current.maybe_add_child(move)
         return current
 
     def add_child(self, move):
