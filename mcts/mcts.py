@@ -59,11 +59,11 @@ class Node(object):
             self.game.ended = True
             self.is_expanded = True
             self.total_value = -1 if game.turn is Player.WHITE else 1
-
-        self.child_total_value = np.zeros(
-            [len(self.legal_moves)], dtype=np.float32)
-        self.child_number_visits = np.zeros(
-            [len(self.legal_moves)], dtype=np.float32)
+        else:
+            self.child_total_value = np.zeros(
+                [len(self.legal_moves)], dtype=np.float32)
+            self.child_number_visits = np.zeros(
+                [len(self.legal_moves)], dtype=np.float32)
 
     def _possible_starting_positions(self):
         """
