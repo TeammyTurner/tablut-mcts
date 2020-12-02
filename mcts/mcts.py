@@ -4,7 +4,7 @@ from copy import deepcopy
 import itertools
 from tablut.rules.ashton import Board, Player
 from tablut.game import Game, WinException, LoseException, DrawException
-import heuristics
+from mcts.heuristics import Heuristic
 
 BOARD_SIDE = 9
 BOARD_SIZE = BOARD_SIDE * BOARD_SIDE
@@ -35,6 +35,7 @@ class Node(object):
     """
     Based on https://www.moderndescartes.com/essays/deep_dive_mcts/
     """
+
     def __init__(self, game, parent=None, move=None, remaining_moves=50, C=np.sqrt(2), heuristic=None):
         self.heuristic = heuristic
         self.game = game
@@ -48,7 +49,9 @@ class Node(object):
         self.children = {}  # Dict[move, Node instance]
 
         # search legal moves starting from the current state
-        self.legal_moves = [flatten_move(*x) for x in self.possible_moves() if game.board.is_legal(game.turn, *x)[0]]
+        self.legal_moves = [
+            flatten_move(*x) for x in self.possible_moves() 
+            if game.board.is_legal(game.turn, *x)[0]]
 
         # if no moves can be performed the current player loses!
         if len(self.legal_moves) == 0:
@@ -83,11 +86,17 @@ class Node(object):
         """
         position = self.game.board.board == 0
         if self.game.turn is Player.WHITE:
-            position = position | (self.game.board.board == 0.7) 
+            position = position | (self.game.board.board == 0.7)
             position = position | (self.game.board.board == 0.3)
         else:
             position = position | (self.game.board.board == -0.5)
         return position
+
+    def _is_orthogonal(self, start, end):
+        """
+        Check if the move is orthogonal
+        """
+        return start[0] == end[0] or start[1] == end[1]
 
     def possible_moves(self):
         """
@@ -97,13 +106,13 @@ class Node(object):
         sri = list(starting_positions.sum(0).nonzero()[0])
         sci = list(starting_positions.sum(1).nonzero()[0])
         starts = [x for x in itertools.product(sri, sci)]
-        
+
         ending_positions = self._possible_ending_positions()
         eri = list(ending_positions.sum(0).nonzero()[0])
         eci = list(ending_positions.sum(1).nonzero()[0])
         ends = [x for x in itertools.product(eri, eci)]
-        
-        moves = [x for x in itertools.product(starts, ends) if x[0] != x[1]]
+
+        moves = [x for x in itertools.product(starts, ends) if x[0] != x[1] and self._is_orthogonal(*x)]
         return moves
 
     @property
@@ -131,7 +140,7 @@ class Node(object):
     def total_value(self, value):
         idx = self.parent.legal_moves.index(self.move)
         self.parent.child_total_value[idx] = value
-   
+
     def child_Q(self):
         """
         Calculate Q of each child as the number of wins of that child divided by the number of plays of
@@ -157,7 +166,8 @@ class Node(object):
         for move in self.legal_moves:
             next_game = self.game.what_if(*deflatten_move(move))
             packed_board = next_game.board.pack(next_game.board.board)
-            child_heuristics.append(heuristics.evaluate(packed_board, self.game.turn))
+            child_heuristics.append(
+                heuristics.evaluate(packed_board, self.game.turn))
 
         return child_heuristics / (self.child_number_visits + 1)
 
@@ -188,13 +198,15 @@ class Node(object):
         current = self
         while not current.game.ended and current.remaining_moves > 0:
             # Get the best possible move
-            what_if_board = lambda m: current.game.what_if(*deflatten_move(m)).board.board
-            move_priors = [
-                self.heuristic.evaluate(what_if_board(m), current.game.turn)
-                for m in current.legal_moves
-            ]
+            if current.heuristic is not None:
+                def what_if_board(m): 
+                    return current.game.what_if(*deflatten_move(m)).board.board
+                move_priors = [current.heuristic.evaluate(what_if_board(m), current.game.turn)
+                               for m in current.legal_moves]
+                move = current.legal_moves[np.argmax(move_priors)]
+            else:
+                move = np.random.choice(current.legal_moves)
             
-            move = current.legal_moves[np.argmax(move_priors)]
             current = current.maybe_add_child(move)
         return current
 
@@ -208,9 +220,10 @@ class Node(object):
             new_game.white_move(*deflatten_move(move), known_legal=True)
         else:
             new_game.black_move(*deflatten_move(move), known_legal=True)
-        
+
         rm = self.remaining_moves - 1
-        self.children[move] = Node(new_game, parent=self, move=move, remaining_moves=rm, heuristic=self.heuristic)
+        self.children[move] = Node(
+            new_game, parent=self, move=move, remaining_moves=rm, heuristic=self.heuristic)
         return self.children[move]
 
     def maybe_add_child(self, move):
@@ -237,7 +250,7 @@ class Node(object):
                 current.total_value += 1
             current = current.parent
 
-   
+
 class Root(Node):
     def __init__(self, game, **kwargs):
         super().__init__(game, parent=None, move=None, **kwargs)
@@ -270,7 +283,7 @@ class Root(Node):
         """
         Set how many wins passing through this node has been totalized
         """
-        self._total_value = v
+        self._total_value = value
 
 
 class MCTS(object):
@@ -279,14 +292,36 @@ class MCTS(object):
     # TODO: Implement adaptive max_depth? Detect how useless a reached state is?
     # TODO: Implement adaptive simulation? If we can do few legal moves it makes sense doing more simulations
     # TODO: Implement exploratory-quality-heuristics weights?
-    # TODO: Implement setting a new node by modifying the current one
     # TODO: Implement self-adjusting heuristics? Later in the game being near the escape is more important than having less pieces
     """
-    def __init__(self, game_state, max_depth=20):
-        self.heuristic = heuristics.Heuristic()
-        self.game = None
+
+    def __init__(self, game_state, max_depth=20, use_heuristics=True):
+        self.heuristic = Heuristic() if use_heuristics else None
+        self.game = deepcopy(game_state)
         self.max_depth = max_depth
-        self.root = Root(game_state, remaining_moves=max_depth, heuristic=self.heuristic)
+        self._root = Root(game_state, remaining_moves=max_depth,
+                          heuristic=self.heuristic)
+
+    @property
+    def root(self):
+        return self._root
+
+    def new_root(self, start, end):
+        """
+        Set as root the node obtained by applying the specified move in the current state
+        """
+        m = flatten_move(start, end)
+        if m in self._root.children:
+            self._root = self._root.children[m]
+        else:
+            # move is not available among root children so we obtain it manually
+            if self.game.turn is Player.WHITE:
+                self.game.white_move(start, end, known_legal=True)
+            else:
+                self.game.black_move(start, end, known_legal=True)
+            
+            self._root = Root(self.game, remaining_moves=self.max_depth,
+                              heuristic=self.heuristic) 
 
     def search(self, simulations):
         """
@@ -295,22 +330,22 @@ class MCTS(object):
         expansion phase
         # TODO: Detect if multiple CPUs and implement multithread search? (Node is not thread safe)
         """
-        start = self.root
+        start = self._root
         for _ in range(simulations):
             leaf = start.select_leaf()
             leaf = leaf.expand()
             leaf.backup()
-        
+
         move, node = max(start.children.items(),
-                          key=lambda item: item[1].number_visits)
-        
-        self.root = node
+                         key=lambda item: item[1].number_visits)
+
+        self._root = node
         return deflatten_move(move)
 
 if __name__ == "__main__":
     simulations = 10
     game = Game(Board())
-    mcts = MCTS(game, max_depth=50)
+    mcts = MCTS(game, max_depth=50, use_heuristics=False)
     import time
     tick = time.time()
     start, end = mcts.search(simulations)
