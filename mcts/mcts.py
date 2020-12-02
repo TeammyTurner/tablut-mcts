@@ -50,7 +50,7 @@ class Node(object):
 
         # search legal moves starting from the current state
         self.legal_moves = [
-            flatten_move(*x) for x in self.possible_moves() 
+            flatten_move(*x) for x in self.possible_moves()
             if game.board.is_legal(game.turn, *x)[0]]
 
         # if no moves can be performed the current player loses!
@@ -69,15 +69,11 @@ class Node(object):
         Compute the possible starting positions for the current player
         """
         if self.game.turn is Player.WHITE:
-            tw = self.game.board.board == 2
-            tk = self.game.board.board == 1
-            ck = self.game.board.board == 1.7
-            positions = tw | tk | ck
+            positions = (self.game.board.board == 2) | (
+                self.game.board.board == 1) | (self.game.board.board == 1.7)
         else:
-            tb = self.game.board.board == -2
-            cb = self.game.board.board == -2.5
-            ce = self.game.board.board == -0.5
-            positions = tb | cb | ce
+            positions = (self.game.board.board == -2.5) | (
+                self.game.board.board == -2) | (self.game.board.board == -0.5)
         return positions
 
     def _possible_ending_positions(self):
@@ -86,8 +82,8 @@ class Node(object):
         """
         position = self.game.board.board == 0
         if self.game.turn is Player.WHITE:
-            position = position | (self.game.board.board == 0.7)
-            position = position | (self.game.board.board == 0.3)
+            position = position | (self.game.board.board == 0.7) | (
+                self.game.board.board == 0.3)
         else:
             position = position | (self.game.board.board == -0.5)
         return position
@@ -112,7 +108,8 @@ class Node(object):
         eci = list(ending_positions.sum(1).nonzero()[0])
         ends = [x for x in itertools.product(eri, eci)]
 
-        moves = [x for x in itertools.product(starts, ends) if x[0] != x[1] and self._is_orthogonal(*x)]
+        moves = (x for x in itertools.product(
+            starts, ends) if x[0] != x[1] and self._is_orthogonal(*x))
         return moves
 
     @property
@@ -199,14 +196,14 @@ class Node(object):
         while not current.game.ended and current.remaining_moves > 0:
             # Get the best possible move
             if current.heuristic is not None:
-                def what_if_board(m): 
+                def what_if_board(m):
                     return current.game.what_if(*deflatten_move(m)).board.board
                 move_priors = [current.heuristic.evaluate(what_if_board(m), current.game.turn)
                                for m in current.legal_moves]
                 move = current.legal_moves[np.argmax(move_priors)]
             else:
                 move = np.random.choice(current.legal_moves)
-            
+
             current = current.maybe_add_child(move)
         return current
 
@@ -320,9 +317,9 @@ class MCTS(object):
                 self.game.white_move(start, end, known_legal=True)
             else:
                 self.game.black_move(start, end, known_legal=True)
-            
+
             self._root = Root(self.game, remaining_moves=self.max_depth,
-                              heuristic=self.heuristic) 
+                              heuristic=self.heuristic)
 
     def search(self, simulations):
         """
@@ -348,6 +345,7 @@ class MCTS(object):
         self._root = node
         self._root.remaining_moves = self.max_depth
         return deflatten_move(move)
+
 
 if __name__ == "__main__":
     simulations = 10
