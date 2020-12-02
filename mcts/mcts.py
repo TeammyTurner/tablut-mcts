@@ -192,7 +192,7 @@ class Node(object):
         """
         Expand the game by taking random actions until a win condition is met
         """
-        if self.is_expanded:
+        if not self.is_expanded:
             self.is_expanded = True
             current = self
             while not current.game.ended and current.remaining_moves > 0:
