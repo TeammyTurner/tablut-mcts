@@ -298,6 +298,7 @@ class MCTS(object):
     def __init__(self, game_state, max_depth=20, use_heuristics=True):
         self.heuristic = Heuristic() if use_heuristics else None
         self.game = deepcopy(game_state)
+        self._needed_moves = list()
         self.max_depth = max_depth
         self._root = Root(game_state, remaining_moves=max_depth,
                           heuristic=self.heuristic)
@@ -334,12 +335,18 @@ class MCTS(object):
         for _ in range(simulations):
             leaf = start.select_leaf()
             leaf = leaf.expand()
+            self._needed_moves.append(self.max_depth - leaf.remaining_moves)
             leaf.backup()
+
+        # adapt new max_depth based on past needed moves
+        avg = sum(self._needed_moves) / len(self._needed_moves)
+        self.max_depth = int(avg)
 
         move, node = max(start.children.items(),
                          key=lambda item: item[1].number_visits)
 
         self._root = node
+        self._root.remaining_moves = self.max_depth
         return deflatten_move(move)
 
 if __name__ == "__main__":
