@@ -50,12 +50,12 @@ class Node(object):
         self.legal_moves = [
             flatten_move(*x) for x in self.possible_moves()
             if game.board.is_legal(game.turn, *x)[0]]
-        self.number_visits = 0
+        self._number_visits = 0
 
         # if no moves can be performed the current player loses!
         if len(self.legal_moves) == 0:
             self.game.ended = True
-            self.number_visits = self.number_visits + 1
+            self._number_visits = self._number_visits + 1
             self.total_value = 0 if game.turn is Player.WHITE else 1
         else:
             self.child_total_value = np.zeros(
@@ -151,7 +151,7 @@ class Node(object):
         this node, and n is the number of visits of the child if we choose him 
         U is unexpectancy e.g. how little we have explored that child 
         """
-        u = self.C * np.sqrt(np.log(self.number_visits + 1) /
+        u = self.C * np.sqrt(np.log(self._number_visits + 1) /
                              (self.child_number_visits + 1))
         print("U:::"+str(u))
         return u
