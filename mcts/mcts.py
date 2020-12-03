@@ -158,7 +158,6 @@ class Node(object):
         """
         Return the most promising move among childs
         """
-        #idx = np.argmax(self.child_Q() + self.child_U() + self.child_Pb())
         idx = np.argmax(self.child_Q() + self.child_U())
         return self.legal_moves[idx]
 
@@ -167,8 +166,10 @@ class Node(object):
         Traverse tree reaching a leaf node who hasn't been expanded
         yet, choose the best child based on the evaluations made on them
         """
+        # a leaf is considered so until it has some unused child
+        # we go down further until our children list is not empty
         current = self
-        while current.is_expanded and len(current.legal_moves) > 0:
+        while current.children:
             best_move = current.best_child()
             current = current.maybe_add_child(best_move)
         return current
@@ -177,12 +178,12 @@ class Node(object):
         """
         Expand the game by taking random actions until a win condition is met
         """
-        if not self.is_expanded:
-            current = self
-            while not current.game.ended and current.remaining_moves > 0:
-                self.is_expanded = True
-                move = np.random.choice(current.legal_moves)
-                current = current.maybe_add_child(move)
+        current = self
+        # self should be a not expanded node a not expanded node
+        # this if shoudnt be needed
+        while current.game.ended is False and current.remaining_moves > 0:
+            move = np.random.choice(current.legal_moves)
+            current = current.maybe_add_child(move)
         return current
 
     def add_child(self, move):
