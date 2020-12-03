@@ -152,7 +152,7 @@ class Node(object):
         """
         u = self.C * np.sqrt(np.log(self.number_visits + 1) /
                              (self.child_number_visits + 1))
-        print(u)
+        print("U:::"+str(u))
         return u
 
     def best_child(self):
