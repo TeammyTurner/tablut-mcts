@@ -187,7 +187,7 @@ class Node(object):
         if len(current.legal_moves) == 0:
             # opponent wins
             current.game.ended = True
-            current.game.winner = current.game.turn.next()
+            current.game.winner = Player.WHITE if current.game.turn is Player.BLACK else Player.BLACK
 
         return current
 
