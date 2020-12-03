@@ -168,6 +168,7 @@ class Node(object):
         # we go down further until our children list is not empty
         current = self
         while current.children:
+            print(self.child_Q() + self.child_U())
             best_move = current.best_child()
             current = current.maybe_add_child(best_move)
         return current
@@ -213,13 +214,13 @@ class Node(object):
         value estimation sign so that each player can take the best possible actions.
         In this scenario as WHITE moves first we invert when BLACK is playing.
         """
-        winner = self.game.winner
-        current = self
-        while current.parent is not None:
-            current.number_visits += 1
-            if current.game.turn is winner:
-                current.total_value += 1
-            current = current.parent
+        if self.game.ended:
+            winner = self.game.winner
+            current = self
+            while current.parent is not None:
+                current.number_visits += 1
+                current.total_value += 1 if current.game.turn is winner else -1  
+                current = current.parent
 
 
 class Root(Node):
@@ -313,7 +314,6 @@ class MCTS(object):
         while ((time.time() - start_t) + avg(s_per_simulation)) <= max_time:            
             # select leaf
             leaf = start.select_leaf()
-            # expand it until a win is reached (or the max_depth is reached)
             # obtain a new leaf
             leaf = leaf.expand()
             # save the number of moves needed to reach this leaf
