@@ -350,7 +350,7 @@ class MCTS(object):
                   (*deflatten_move(move), node.total_value, node.number_visits))
 
         move, node = max(start.children.items(),
-                         key=lambda item: item[1].total_value)
+                         key=lambda item: (item[1].total_value / item[1].number_visits))
 
         self._root = node
         #self._root.remaining_moves = self.max_depth
