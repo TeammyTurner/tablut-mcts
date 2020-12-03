@@ -197,8 +197,7 @@ class Node(object):
             new_game.black_move(*deflatten_move(move), known_legal=True)
 
         rm = self.remaining_moves - 1
-        self.children[move] = Node(
-            new_game, parent=self, move=move, remaining_moves=rm, heuristic=self.heuristic)
+        self.children[move] = Node(new_game, parent=self, move=move, remaining_moves=rm)
         return self.children[move]
 
     def maybe_add_child(self, move):
@@ -274,8 +273,7 @@ class MCTS(object):
         self.game = deepcopy(game_state)
         self._needed_moves = list()
         self.max_depth = max_depth
-        self._root = Root(game_state, remaining_moves=max_depth,
-                          heuristic=self.heuristic)
+        self._root = Root(game_state, remaining_moves=max_depth)
 
     @property
     def root(self):
