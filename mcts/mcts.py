@@ -74,19 +74,19 @@ class Node(object):
         else:
             positions = (self.game.board.board == -2.5) | (
                 self.game.board.board == -2)
-        return positions
+        return np.transpose(np.where(positions))
 
     def _possible_ending_positions(self):
         """
         Compute the possible starting positions for the current player
         """
-        position = self.game.board.board == 0
+        positions = self.game.board.board == 0
         if self.game.turn is Player.WHITE:
-            position = position | (self.game.board.board == 0.7) | (
+            positions = positions | (self.game.board.board == 0.7) | (
                 self.game.board.board == 0.3)
         else:
-            position = position | (self.game.board.board == -0.5)
-        return position
+            positions = positions | (self.game.board.board == -0.5)
+        return np.transpose(np.where(positions))
 
     def _is_orthogonal(self, start, end):
         """
@@ -98,18 +98,10 @@ class Node(object):
         """
         Computes all the possible moves given the current game state
         """
-        starting_positions = self._possible_starting_positions()
-        sri = list(starting_positions.sum(0).nonzero()[0])
-        sci = list(starting_positions.sum(1).nonzero()[0])
-        starts = [x for x in itertools.product(sri, sci)]
-
-        ending_positions = self._possible_ending_positions()
-        eri = list(ending_positions.sum(0).nonzero()[0])
-        eci = list(ending_positions.sum(1).nonzero()[0])
-        ends = [x for x in itertools.product(eri, eci)]
-
-        moves = (x for x in itertools.product(
-            starts, ends) if x[0] != x[1] and self._is_orthogonal(*x))
+        starts = [tuple(x) for x in self._possible_starting_positions()]
+        ends = [tuple(x) for x in self._possible_ending_positions()]
+        
+        moves = [(s, e) for s in starts for e in ends if self._is_orthogonal(s, e)]
         return moves
 
     @property
@@ -363,7 +355,7 @@ class MCTS(object):
 if __name__ == "__main__":
     simulations = 10
     game = Game(Board())
-    mcts = MCTS(game, max_depth=50)
+    mcts = MCTS(game, Player.WHITE, max_depth=50)
     import time
     tick = time.time()
     start, end = mcts.search(simulations)
