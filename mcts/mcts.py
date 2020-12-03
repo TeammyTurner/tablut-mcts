@@ -219,16 +219,16 @@ class Node(object):
         In this scenario as WHITE moves first we invert when BLACK is playing.
         """
         ended = self.game.ended
-        winned = self.game.winner is self.playing_as
-        
-        print(self.playing_as, ended, winned)
+        won = self.game.winner is self.playing_as
+        if (won):
+            print(self.playing_as, ended, won)
         current = self
         while current.parent is not None:
             current.number_visits += 1
 
-            if ended and winned:
+            if ended and won:
                 current.total_value += 1
-                
+
             current = current.parent
 
 
@@ -283,7 +283,8 @@ class MCTS(object):
         self._needed_moves = list()
         self.max_depth = max_depth
         self.simulations = 0
-        self._root = Root(game_state, playing_as, remaining_moves=max_depth, C=self.C)
+        self._root = Root(game_state, playing_as,
+                          remaining_moves=max_depth, C=self.C)
 
     @property
     def root(self):
