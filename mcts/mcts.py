@@ -44,7 +44,6 @@ class Node(object):
         self.remaining_moves = remaining_moves
         self.C = C
 
-        self.is_expanded = False
         self.parent = parent
         self.children = {}  # Dict[move, Node instance]
 
