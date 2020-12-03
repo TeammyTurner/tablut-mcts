@@ -171,6 +171,7 @@ class Node(object):
         # we go down further until our children list is not empty
         current = self
         while current.children:
+            current._number_visits += 1
             best_move = current.best_child()
             current = current.maybe_add_child(best_move)
         return current
