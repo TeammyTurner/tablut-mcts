@@ -150,7 +150,10 @@ class Node(object):
         this node, and n is the number of visits of the child if we choose him 
         U is unexpectancy e.g. how little we have explored that child 
         """
-        return self.C * np.sqrt(np.log(self.number_visits + 1) / (self.child_number_visits + 1))
+        u = self.C * np.sqrt(np.log(self.number_visits + 1) /
+                             (self.child_number_visits + 1))
+        print(u)
+        return u
 
     def best_child(self):
         """
@@ -194,7 +197,8 @@ class Node(object):
             new_game.black_move(*deflatten_move(move), known_legal=True)
 
         rm = self.remaining_moves - 1
-        self.children[move] = Node(new_game, parent=self, move=move, remaining_moves=rm, C=self.C)
+        self.children[move] = Node(
+            new_game, parent=self, move=move, remaining_moves=rm, C=self.C)
         return self.children[move]
 
     def maybe_add_child(self, move):
@@ -218,7 +222,7 @@ class Node(object):
         current = self
         while current.parent is not None:
             current.number_visits += 1
-            
+
             if ended:
                 if winner is None:
                     current.total_value += 0.5
@@ -226,7 +230,7 @@ class Node(object):
                     current.total_value += 1
                 else:
                     current.total_value -= 1
-                
+
             current = current.parent
 
 
@@ -311,7 +315,7 @@ class MCTS(object):
         """
         start = self._root
         start_t = time.time()
-        
+
         self.simulations = 0
 
         # save seconds per simulation so we can safely know wether another simulation can be done
@@ -319,7 +323,7 @@ class MCTS(object):
         def avg(l): return 0 if len(l) == 0 else sum(l) / len(l)
 
         # while we have some time left
-        while ((time.time() - start_t) + avg(s_per_simulation)) <= max_time:            
+        while ((time.time() - start_t) + avg(s_per_simulation)) <= max_time:
             # select leaf
             leaf = start.select_leaf()
             # obtain a new leaf
@@ -329,13 +333,14 @@ class MCTS(object):
             self._needed_moves.append(used_moves)
             # propagate leaf result
             leaf.backup()
-            
+
             # the number of simulations carried out
             self.simulations += 1
-            print("MCTS perfomed simulation: %s with %d moves" % (self.simulations, used_moves), end="\r")
+            print("MCTS perfomed simulation: %s with %d moves" %
+                  (self.simulations, used_moves), end="\r")
 
         print("MCTS performed %d simulations" % self.simulations)
-        
+
         # adapt new max_depth based on past needed moves
         # TODO: Works?
         avg = sum(self._needed_moves) / len(self._needed_moves)
@@ -343,7 +348,8 @@ class MCTS(object):
 
         # search for best move
         for move, node in start.children.items():
-            print("Move %s -> %s, %s/%s" % (*deflatten_move(move), node.total_value, node.number_visits))
+            print("Move %s -> %s, %s/%s" %
+                  (*deflatten_move(move), node.total_value, node.number_visits))
 
         move, node = max(start.children.items(),
                          key=lambda item: item[1].total_value)
