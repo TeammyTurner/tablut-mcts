@@ -4,7 +4,6 @@ from copy import deepcopy
 import itertools
 from tablut.rules.ashton import Board, Player
 from tablut.game import Game, WinException, LoseException, DrawException
-from mcts.heuristics import Heuristic
 import time
 
 BOARD_SIDE = 9
@@ -37,15 +36,14 @@ class Node(object):
     Based on https://www.moderndescartes.com/essays/deep_dive_mcts/
     """
 
-    def __init__(self, game, parent=None, move=None, remaining_moves=50, C=np.sqrt(2), heuristic=None):
-        self.heuristic = heuristic
+    def __init__(self, game, playing_as, parent=None, move=None, remaining_moves=50, C=np.sqrt(2)):
         self.game = game
+        self.playing_as = playing_as
         self.move = move
 
         self.remaining_moves = remaining_moves
         self.C = C
 
-        self.is_expanded = False
         self.parent = parent
         self.children = {}  # Dict[move, Node instance]
 
@@ -53,17 +51,18 @@ class Node(object):
         self.legal_moves = [
             flatten_move(*x) for x in self.possible_moves()
             if game.board.is_legal(game.turn, *x)[0]]
+        self._number_visits = 0
 
         # if no moves can be performed the current player loses!
         if len(self.legal_moves) == 0:
             self.game.ended = True
-            self.is_expanded = True
-            self.total_value = -1 if game.turn is Player.WHITE else 1
-
-        self.child_total_value = np.zeros(
-            [len(self.legal_moves)], dtype=np.float32)
-        self.child_number_visits = np.zeros(
-            [len(self.legal_moves)], dtype=np.float32)
+            self._number_visits = self._number_visits + 1
+            self.total_value = 0 if game.turn is Player.WHITE else 1
+        else:
+            self.child_total_value = np.zeros(
+                [len(self.legal_moves)], dtype=np.float32)
+            self.child_number_visits = np.zeros(
+                [len(self.legal_moves)], dtype=np.float32)
 
     def _possible_starting_positions(self):
         """
@@ -74,20 +73,20 @@ class Node(object):
                 self.game.board.board == 1) | (self.game.board.board == 1.7)
         else:
             positions = (self.game.board.board == -2.5) | (
-                self.game.board.board == -2) | (self.game.board.board == -0.5)
-        return positions
+                self.game.board.board == -2)
+        return np.transpose(np.where(positions))
 
     def _possible_ending_positions(self):
         """
         Compute the possible starting positions for the current player
         """
-        position = self.game.board.board == 0
+        positions = self.game.board.board == 0
         if self.game.turn is Player.WHITE:
-            position = position | (self.game.board.board == 0.7) | (
+            positions = positions | (self.game.board.board == 0.7) | (
                 self.game.board.board == 0.3)
         else:
-            position = position | (self.game.board.board == -0.5)
-        return position
+            positions = positions | (self.game.board.board == -0.5)
+        return np.transpose(np.where(positions))
 
     def _is_orthogonal(self, start, end):
         """
@@ -99,18 +98,11 @@ class Node(object):
         """
         Computes all the possible moves given the current game state
         """
-        starting_positions = self._possible_starting_positions()
-        sri = list(starting_positions.sum(0).nonzero()[0])
-        sci = list(starting_positions.sum(1).nonzero()[0])
-        starts = [x for x in itertools.product(sri, sci)]
+        starts = [tuple(x) for x in self._possible_starting_positions()]
+        ends = [tuple(x) for x in self._possible_ending_positions()]
 
-        ending_positions = self._possible_ending_positions()
-        eri = list(ending_positions.sum(0).nonzero()[0])
-        eci = list(ending_positions.sum(1).nonzero()[0])
-        ends = [x for x in itertools.product(eri, eci)]
-
-        moves = (x for x in itertools.product(
-            starts, ends) if x[0] != x[1] and self._is_orthogonal(*x))
+        moves = [(s, e)
+                 for s in starts for e in ends if self._is_orthogonal(s, e)]
         return moves
 
     @property
@@ -153,27 +145,14 @@ class Node(object):
         this node, and n is the number of visits of the child if we choose him 
         U is unexpectancy e.g. how little we have explored that child 
         """
-        return self.C * np.sqrt(np.log(self.number_visits + 1) / (self.child_number_visits + 1))
-
-    def child_Pb(self):
-        """
-        Compute the progressive bias for each child defined as h/n where h is the defined heuristics and n 
-        the number of visits of the child if we choose him
-        """
-        child_heuristics = list()
-        for move in self.legal_moves:
-            next_game = self.game.what_if(*deflatten_move(move))
-            packed_board = next_game.board.pack(next_game.board.board)
-            child_heuristics.append(
-                heuristics.evaluate(packed_board, self.game.turn))
-
-        return child_heuristics / (self.child_number_visits + 1)
+        u = self.C * (np.sqrt(np.log(self.number_visits + 2) /
+                              (1 + self.child_number_visits)))
+        return u
 
     def best_child(self):
         """
         Return the most promising move among childs
         """
-        #idx = np.argmax(self.child_Q() + self.child_U() + self.child_Pb())
         idx = np.argmax(self.child_Q() + self.child_U())
         return self.legal_moves[idx]
 
@@ -182,8 +161,10 @@ class Node(object):
         Traverse tree reaching a leaf node who hasn't been expanded
         yet, choose the best child based on the evaluations made on them
         """
+        # a leaf is considered so until it has some unused child
+        # we go down further until our children list is not empty
         current = self
-        while current.is_expanded:
+        while current.children:
             best_move = current.best_child()
             current = current.maybe_add_child(best_move)
         return current
@@ -192,19 +173,9 @@ class Node(object):
         """
         Expand the game by taking random actions until a win condition is met
         """
-        self.is_expanded = True
         current = self
         while not current.game.ended and current.remaining_moves > 0:
-            # Get the best possible move
-            if current.heuristic is not None:
-                def what_if_board(m):
-                    return current.game.what_if(*deflatten_move(m)).board.board
-                move_priors = [current.heuristic.evaluate(what_if_board(m), current.game.turn)
-                               for m in current.legal_moves]
-                move = current.legal_moves[np.argmax(move_priors)]
-            else:
-                move = np.random.choice(current.legal_moves)
-
+            move = np.random.choice(current.legal_moves)
             current = current.maybe_add_child(move)
         return current
 
@@ -221,7 +192,7 @@ class Node(object):
 
         rm = self.remaining_moves - 1
         self.children[move] = Node(
-            new_game, parent=self, move=move, remaining_moves=rm, heuristic=self.heuristic)
+            new_game, self.playing_as, parent=self, move=move, remaining_moves=rm, C=self.C)
         return self.children[move]
 
     def maybe_add_child(self, move):
@@ -240,20 +211,25 @@ class Node(object):
         value estimation sign so that each player can take the best possible actions.
         In this scenario as WHITE moves first we invert when BLACK is playing.
         """
-        winner = self.game.winner
+        ended = self.game.ended
+        won = self.game.winner is self.playing_as
+        if (won):
+            print(self.playing_as, ended, won)
         current = self
         while current.parent is not None:
             current.number_visits += 1
-            if current.game.turn is winner:
-                current.total_value += 1
+
+            if ended and won:
+                current.total_value += (1 + (self.remaining_moves * (10**-2)))
+
             current = current.parent
 
 
 class Root(Node):
-    def __init__(self, game, **kwargs):
-        super().__init__(game, parent=None, move=None, **kwargs)
+    def __init__(self, game, playing_as, C=None, **kwargs):
         self._number_visits = 0
         self._total_value = 0
+        super().__init__(game, playing_as, C=C, parent=None, move=None, **kwargs)
 
     @property
     def number_visits(self):
@@ -293,13 +269,15 @@ class MCTS(object):
     # TODO: Implement self-adjusting heuristics? Later in the game being near the escape is more important than having less pieces
     """
 
-    def __init__(self, game_state, max_depth=20, use_heuristics=True):
-        self.heuristic = Heuristic() if use_heuristics else None
+    def __init__(self, game_state, playing_as, max_depth=20, C=np.sqrt(2)):
+        self.C = C
         self.game = deepcopy(game_state)
+        self.playing_as = playing_as
         self._needed_moves = list()
         self.max_depth = max_depth
-        self._root = Root(game_state, remaining_moves=max_depth,
-                          heuristic=self.heuristic)
+        self.simulations = 0
+        self._root = Root(game_state, playing_as,
+                          remaining_moves=max_depth, C=self.C)
 
     @property
     def root(self):
@@ -330,29 +308,47 @@ class MCTS(object):
         """
         start = self._root
         start_t = time.time()
-        self.simulations = 0
-        
-        s_per_simulation = list()
-        avg = lambda l: 0 if len(l) == 0 else sum(l) / len(l)
 
+        self.simulations = 0
+
+        # save seconds per simulation so we can safely know wether another simulation can be done
+        s_per_simulation = list()
+        def avg(l): return 0 if len(l) == 0 else sum(l) / len(l)
+
+        # while we have some time left
         while ((time.time() - start_t) + avg(s_per_simulation)) <= max_time:
-            simulation_start_t = time.time()
+            # select leaf
             leaf = start.select_leaf()
+            # obtain a new leaf
             leaf = leaf.expand()
-            self._needed_moves.append(self.max_depth - leaf.remaining_moves)
+            # save the number of moves needed to reach this leaf
+            used_moves = self.max_depth - leaf.remaining_moves
+            self._needed_moves.append(used_moves)
+            # propagate leaf result
             leaf.backup()
-            s_per_simulation.append(time.time() - simulation_start_t)
+
+            # the number of simulations carried out
             self.simulations += 1
+            print("MCTS perfomed simulation: %s with %d moves" %
+                  (self.simulations, used_moves), end="\r")
+
+        print("MCTS performed %d simulations" % self.simulations)
 
         # adapt new max_depth based on past needed moves
+        # TODO: Works?
         avg = sum(self._needed_moves) / len(self._needed_moves)
         self.max_depth = int(avg)
 
+        # search for best move
+        for move, node in start.children.items():
+            print("Move %s -> %s, %s/%s" %
+                  (*deflatten_move(move), node.total_value, node.number_visits))
+
         move, node = max(start.children.items(),
-                         key=lambda item: item[1].number_visits)
+                         key=lambda item: (item[1].total_value / item[1].number_visits))
 
         self._root = node
-        self._root.remaining_moves = self.max_depth
+        #self._root.remaining_moves = self.max_depth
         self.game = self._root.game
         return deflatten_move(move)
 
@@ -360,7 +356,7 @@ class MCTS(object):
 if __name__ == "__main__":
     simulations = 10
     game = Game(Board())
-    mcts = MCTS(game, max_depth=50, use_heuristics=False)
+    mcts = MCTS(game, Player.WHITE, max_depth=50)
     import time
     tick = time.time()
     start, end = mcts.search(simulations)
