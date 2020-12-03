@@ -14,7 +14,7 @@ black_player = RandomPlayer(game, Player.BLACK)
 # mcts parameters
 num_reads = 100
 max_depth = 50
-mcts = MCTS(deepcopy(game), max_depth=max_depth, use_heuristics=False)
+mcts = MCTS(deepcopy(game), max_depth=max_depth)
 
 
 node = None

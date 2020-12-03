@@ -4,7 +4,6 @@ from copy import deepcopy
 import itertools
 from tablut.rules.ashton import Board, Player
 from tablut.game import Game, WinException, LoseException, DrawException
-from mcts.heuristics import Heuristic
 import time
 
 BOARD_SIDE = 9
@@ -180,9 +179,16 @@ class Node(object):
         current = self
         # self should be a not expanded node a not expanded node
         # this if shoudnt be needed
-        while current.game.ended is False and current.remaining_moves > 0:
+        while len(current.legal_moves) > 0 and not current.game.ended and current.remaining_moves > 0:
             move = np.random.choice(current.legal_moves)
             current = current.maybe_add_child(move)
+
+        # check if we dropped out due to move available
+        if len(current.legal_moves) == 0:
+            # opponent wins
+            current.game.ended = True
+            current.game.winner = current.game.turn.next()
+
         return current
 
     def add_child(self, move):
@@ -273,6 +279,7 @@ class MCTS(object):
         self.game = deepcopy(game_state)
         self._needed_moves = list()
         self.max_depth = max_depth
+        self.simulations = 0
         self._root = Root(game_state, remaining_moves=max_depth)
 
     @property
@@ -304,31 +311,42 @@ class MCTS(object):
         """
         start = self._root
         start_t = time.time()
+        
         self.simulations = 0
 
+        # save seconds per simulation so we can safely know wether another simulation can be done
         s_per_simulation = list()
         def avg(l): return 0 if len(l) == 0 else sum(l) / len(l)
 
-        while ((time.time() - start_t) + avg(s_per_simulation)) <= max_time:
-            simulation_start_t = time.time()
+        # while we have some time left
+        while ((time.time() - start_t) + avg(s_per_simulation)) <= max_time:            
+            # select leaf
             leaf = start.select_leaf()
+            # expand it until a win is reached (or the max_depth is reached)
+            # obtain a new leaf
             leaf = leaf.expand()
+            # save the number of moves needed to reach this leaf
             self._needed_moves.append(self.max_depth - leaf.remaining_moves)
+            # propagate leaf result
             leaf.backup()
-            s_per_simulation.append(time.time() - simulation_start_t)
+            
+            # the number of simulations carried out
             self.simulations += 1
-            if self.simulations % 1000 == 0:  # We print this at every k
-                print("Currently at simulation: {}".format(self.simulations))
+            print("MCTS performing simulation: %s" % self.simulations, end="\r")
 
+        print("MCTS performed %d simulations" % self.simulations)
+        
         # adapt new max_depth based on past needed moves
+        # TODO: Works?
         avg = sum(self._needed_moves) / len(self._needed_moves)
         self.max_depth = int(avg)
 
+        # search for best move
         move, node = max(start.children.items(),
                          key=lambda item: item[1].number_visits)
 
         self._root = node
-        self._root.remaining_moves = self.max_depth
+        #self._root.remaining_moves = self.max_depth
         self.game = self._root.game
         return deflatten_move(move)
 
