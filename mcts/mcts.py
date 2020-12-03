@@ -168,7 +168,6 @@ class Node(object):
         # we go down further until our children list is not empty
         current = self
         while current.children:
-            print(self.child_Q() + self.child_U())
             best_move = current.best_child()
             current = current.maybe_add_child(best_move)
         return current
@@ -195,7 +194,7 @@ class Node(object):
             new_game.black_move(*deflatten_move(move), known_legal=True)
 
         rm = self.remaining_moves - 1
-        self.children[move] = Node(new_game, parent=self, move=move, remaining_moves=rm)
+        self.children[move] = Node(new_game, parent=self, move=move, remaining_moves=rm, C=self.C)
         return self.children[move]
 
     def maybe_add_child(self, move):
@@ -232,10 +231,10 @@ class Node(object):
 
 
 class Root(Node):
-    def __init__(self, game, **kwargs):
+    def __init__(self, game, C=None, **kwargs):
         self._number_visits = 0
         self._total_value = 0
-        super().__init__(game, parent=None, move=None, **kwargs)
+        super().__init__(game, C=C, parent=None, move=None, **kwargs)
 
     @property
     def number_visits(self):
@@ -275,12 +274,13 @@ class MCTS(object):
     # TODO: Implement self-adjusting heuristics? Later in the game being near the escape is more important than having less pieces
     """
 
-    def __init__(self, game_state, max_depth=20):
+    def __init__(self, game_state, max_depth=20, C=np.sqrt(2)):
+        self.C = C
         self.game = deepcopy(game_state)
         self._needed_moves = list()
         self.max_depth = max_depth
         self.simulations = 0
-        self._root = Root(game_state, remaining_moves=max_depth)
+        self._root = Root(game_state, remaining_moves=max_depth, C=self.C)
 
     @property
     def root(self):
@@ -342,8 +342,11 @@ class MCTS(object):
         self.max_depth = int(avg)
 
         # search for best move
+        for move, node in start.children.items():
+            print("Move %s -> %s, %s/%s" % (*deflatten_move(move), node.total_value, node.number_visits))
+
         move, node = max(start.children.items(),
-                         key=lambda item: item[1].number_visits)
+                         key=lambda item: item[1].total_value)
 
         self._root = node
         #self._root.remaining_moves = self.max_depth
