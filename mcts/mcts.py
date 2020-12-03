@@ -36,8 +36,9 @@ class Node(object):
     Based on https://www.moderndescartes.com/essays/deep_dive_mcts/
     """
 
-    def __init__(self, game, parent=None, move=None, remaining_moves=50, C=np.sqrt(2)):
+    def __init__(self, game, playing_as=None, parent=None, move=None, remaining_moves=50, C=np.sqrt(2)):
         self.game = game
+        self.playing_as = playing_as
         self.move = move
 
         self.remaining_moves = remaining_moves
@@ -218,25 +219,24 @@ class Node(object):
         In this scenario as WHITE moves first we invert when BLACK is playing.
         """
         ended = self.game.ended
-        winner = self.game.winner
+        winned = self.game.winner is self.playing_as
+        
+        print("game ended: %s winner: %s" % (ended, self.game.winner))
         current = self
         while current.parent is not None:
             current.number_visits += 1
 
-            if ended:
-                if winner is None:
-                    current.total_value += 0.5
-                elif winner is current.game.turn:
-                    current.total_value += 1
-
+            if ended and winned:
+                current.total_value += 1
+                
             current = current.parent
 
 
 class Root(Node):
-    def __init__(self, game, C=None, **kwargs):
+    def __init__(self, game, playing_as=None, C=None, **kwargs):
         self._number_visits = 0
         self._total_value = 0
-        super().__init__(game, C=C, parent=None, move=None, **kwargs)
+        super().__init__(game, playing_as=playing_as, C=C, parent=None, move=None, **kwargs)
 
     @property
     def number_visits(self):
@@ -276,13 +276,14 @@ class MCTS(object):
     # TODO: Implement self-adjusting heuristics? Later in the game being near the escape is more important than having less pieces
     """
 
-    def __init__(self, game_state, max_depth=20, C=np.sqrt(2)):
+    def __init__(self, game_state, playing_as=None, max_depth=20, C=np.sqrt(2)):
         self.C = C
         self.game = deepcopy(game_state)
+        self.playing_as = playing_as
         self._needed_moves = list()
         self.max_depth = max_depth
         self.simulations = 0
-        self._root = Root(game_state, remaining_moves=max_depth, C=self.C)
+        self._root = Root(game_state, playing_as=playing_as, remaining_moves=max_depth, C=self.C)
 
     @property
     def root(self):
