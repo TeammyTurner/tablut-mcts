@@ -50,6 +50,7 @@ class Node(object):
         self.legal_moves = [
             flatten_move(*x) for x in self.possible_moves()
             if game.board.is_legal(game.turn, *x)[0]]
+        self.number_visits = 0
 
         # if no moves can be performed the current player loses!
         if len(self.legal_moves) == 0:
