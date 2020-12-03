@@ -317,13 +317,14 @@ class MCTS(object):
             # obtain a new leaf
             leaf = leaf.expand()
             # save the number of moves needed to reach this leaf
-            self._needed_moves.append(self.max_depth - leaf.remaining_moves)
+            used_moves = self.max_depth - leaf.remaining_moves
+            self._needed_moves.append(used_moves)
             # propagate leaf result
             leaf.backup()
             
             # the number of simulations carried out
             self.simulations += 1
-            print("MCTS performing simulation: %s" % self.simulations, end="\r")
+            print("MCTS perfomed simulation: %s with %d moves" % (self.simulations, used_moves), end="\r")
 
         print("MCTS performed %d simulations" % self.simulations)
         
