@@ -37,8 +37,7 @@ class Node(object):
     Based on https://www.moderndescartes.com/essays/deep_dive_mcts/
     """
 
-    def __init__(self, game, parent=None, move=None, remaining_moves=50, C=np.sqrt(2), heuristic=None):
-        self.heuristic = heuristic
+    def __init__(self, game, parent=None, move=None, remaining_moves=50, C=np.sqrt(2)):
         self.game = game
         self.move = move
 
@@ -155,20 +154,6 @@ class Node(object):
         """
         return self.C * np.sqrt(np.log(self.number_visits + 1) / (self.child_number_visits + 1))
 
-    def child_Pb(self):
-        """
-        Compute the progressive bias for each child defined as h/n where h is the defined heuristics and n 
-        the number of visits of the child if we choose him
-        """
-        child_heuristics = list()
-        for move in self.legal_moves:
-            next_game = self.game.what_if(*deflatten_move(move))
-            packed_board = next_game.board.pack(next_game.board.board)
-            child_heuristics.append(
-                heuristics.evaluate(packed_board, self.game.turn))
-
-        return child_heuristics / (self.child_number_visits + 1)
-
     def best_child(self):
         """
         Return the most promising move among childs
@@ -196,16 +181,7 @@ class Node(object):
             current = self
             while not current.game.ended and current.remaining_moves > 0:
                 self.is_expanded = True
-                # Get the best possible move
-                if current.heuristic is not None:
-                    def what_if_board(m):
-                        return current.game.what_if(*deflatten_move(m)).board.board
-                    move_priors = [current.heuristic.evaluate(what_if_board(m), current.game.turn)
-                                   for m in current.legal_moves]
-                    move = current.legal_moves[np.argmax(move_priors)]
-                else:
-                    move = np.random.choice(current.legal_moves)
-
+                move = np.random.choice(current.legal_moves)
                 current = current.maybe_add_child(move)
         return current
 
@@ -294,8 +270,7 @@ class MCTS(object):
     # TODO: Implement self-adjusting heuristics? Later in the game being near the escape is more important than having less pieces
     """
 
-    def __init__(self, game_state, max_depth=20, use_heuristics=True):
-        self.heuristic = Heuristic() if use_heuristics else None
+    def __init__(self, game_state, max_depth=20):
         self.game = deepcopy(game_state)
         self._needed_moves = list()
         self.max_depth = max_depth
@@ -363,7 +338,7 @@ class MCTS(object):
 if __name__ == "__main__":
     simulations = 10
     game = Game(Board())
-    mcts = MCTS(game, max_depth=50, use_heuristics=False)
+    mcts = MCTS(game, max_depth=50)
     import time
     tick = time.time()
     start, end = mcts.search(simulations)
