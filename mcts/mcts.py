@@ -227,7 +227,7 @@ class Node(object):
             current.number_visits += 1
 
             if ended and won:
-                current.total_value += 1
+                current.total_value += (1 + (self.remaining_moves * (10**-2)))
 
             current = current.parent
 
