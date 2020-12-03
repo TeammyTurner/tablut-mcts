@@ -103,6 +103,7 @@ class Node(object):
 
         moves = [(s, e)
                  for s in starts for e in ends if self._is_orthogonal(s, e)]
+        print(moves)
         return moves
 
     @property
