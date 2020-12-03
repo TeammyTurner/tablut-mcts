@@ -100,8 +100,13 @@ class Node(object):
         """
         starts = [tuple(x) for x in self._possible_starting_positions()]
         ends = [tuple(x) for x in self._possible_ending_positions()]
-        
-        moves = [(s, e) for s in starts for e in ends if self._is_orthogonal(s, e)]
+        moves = []
+        for s in starts:
+            for e in ends:
+                if self._is_orthogonal(s, e):
+                    moves.append((s, e))
+
+        #moves = [(s, e) for s in starts for e in ends if self._is_orthogonal(s, e)]
         return moves
 
     @property
