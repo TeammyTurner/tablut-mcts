@@ -54,8 +54,8 @@ class Node(object):
         # if no moves can be performed the current player loses!
         if len(self.legal_moves) == 0:
             self.game.ended = True
-            self.is_expanded = True
-            self.total_value = -1 if game.turn is Player.WHITE else 1
+            self.number_visits = self.number_visits + 1
+            self.total_value = 0 if game.turn is Player.WHITE else 1
         else:
             self.child_total_value = np.zeros(
                 [len(self.legal_moves)], dtype=np.float32)
@@ -177,18 +177,9 @@ class Node(object):
         Expand the game by taking random actions until a win condition is met
         """
         current = self
-        # self should be a not expanded node a not expanded node
-        # this if shoudnt be needed
-        while len(current.legal_moves) > 0 and not current.game.ended and current.remaining_moves > 0:
+        while not current.game.ended and current.remaining_moves > 0:
             move = np.random.choice(current.legal_moves)
             current = current.maybe_add_child(move)
-
-        # check if we dropped out due to move available
-        if len(current.legal_moves) == 0:
-            # opponent wins
-            current.game.ended = True
-            current.game.winner = Player.WHITE if current.game.turn is Player.BLACK else Player.BLACK
-
         return current
 
     def add_child(self, move):
