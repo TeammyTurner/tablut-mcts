@@ -214,13 +214,21 @@ class Node(object):
         value estimation sign so that each player can take the best possible actions.
         In this scenario as WHITE moves first we invert when BLACK is playing.
         """
-        if self.game.ended:
-            winner = self.game.winner
-            current = self
-            while current.parent is not None:
-                current.number_visits += 1
-                current.total_value += 1 if current.game.turn is winner else -1  
-                current = current.parent
+        ended = self.game.ended
+        winner = self.game.winner
+        current = self
+        while current.parent is not None:
+            current.number_visits += 1
+            
+            if ended:
+                if winner is None:
+                    current.total_value += 0.5
+                elif winner is current.game.turn:
+                    current.total_value += 1
+                else:
+                    current.total_value -= 1
+                
+            current = current.parent
 
 
 class Root(Node):
