@@ -224,9 +224,9 @@ class Node(object):
 
 class Root(Node):
     def __init__(self, game, **kwargs):
-        super().__init__(game, parent=None, move=None, **kwargs)
         self._number_visits = 0
         self._total_value = 0
+        super().__init__(game, parent=None, move=None, **kwargs)
 
     @property
     def number_visits(self):
