@@ -183,7 +183,7 @@ class Node(object):
         yet, choose the best child based on the evaluations made on them
         """
         current = self
-        while current.is_expanded:
+        while current.is_expanded and len(current.legal_moves) > 0:
             best_move = current.best_child()
             current = current.maybe_add_child(best_move)
         return current
