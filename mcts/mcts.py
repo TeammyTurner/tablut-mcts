@@ -151,9 +151,7 @@ class Node(object):
         this node, and n is the number of visits of the child if we choose him 
         U is unexpectancy e.g. how little we have explored that child 
         """
-        u = self.C * np.sqrt(np.log(self._number_visits + 1) /
-                             (self.child_number_visits + 1))
-        print("U:::"+str(u))
+        u = self.C * (np.sqrt(np.log(self.number_visits + 2) / (1 + self.child_number_visits)))
         return u
 
     def best_child(self):
@@ -172,7 +170,6 @@ class Node(object):
         # we go down further until our children list is not empty
         current = self
         while current.children:
-            current._number_visits += 1
             best_move = current.best_child()
             current = current.maybe_add_child(best_move)
         return current
