@@ -151,7 +151,8 @@ class Node(object):
         this node, and n is the number of visits of the child if we choose him 
         U is unexpectancy e.g. how little we have explored that child 
         """
-        u = self.C * (np.sqrt(np.log(self.number_visits + 2) / (1 + self.child_number_visits)))
+        u = self.C * (np.sqrt(np.log(self.number_visits + 2) /
+                              (1 + self.child_number_visits)))
         return u
 
     def best_child(self):
@@ -227,8 +228,6 @@ class Node(object):
                     current.total_value += 0.5
                 elif winner is current.game.turn:
                     current.total_value += 1
-                else:
-                    current.total_value -= 1
 
             current = current.parent
 
